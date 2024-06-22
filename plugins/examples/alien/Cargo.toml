@@ -1,5 +1,5 @@
 [package]
-name = "midi_inverter"
+name = "alien"
 version = "0.1.0"
 edition = "2021"
 authors = ["Robbert van der Helm <mail@robbertvanderhelm.nl>"]
@@ -10,3 +10,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 nih_plug = { path = "../../../", features = ["assert_process_allocs"] }
+nih_plug_iced = { path = "../../../nih_plug_iced" }
+
+atomic_float = "0.1"
