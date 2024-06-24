@@ -1,3 +1,4 @@
+use crate::sensors_data_receiver::SensorData;
 use nih_plug::prelude::NoteEvent;
 use nih_plug::prelude::*;
 use nih_plug_iced::IcedState;
@@ -83,6 +84,7 @@ impl Plugin for Alien {
         _context: &mut impl InitContext<Self>,
     ) -> bool {
         self.sensors_data_receiver.initialize();
+
         true
     }
 
@@ -97,19 +99,50 @@ impl Plugin for Alien {
             .curr_data
             .lock()
             .expect("failed locking");
-        for (_key, value) in curr_data.iter() {
-            self.send_midi_controller_message(context, value.euler_x)
+
+        for (_key, data) in curr_data.iter() {
+            self.calculate_channel_values_and_send(context, data)
         }
+
         ProcessStatus::Normal
     }
 }
 
 impl Alien {
-    fn send_midi_controller_message(&self, context: &mut impl ProcessContext<Self>, value: f32) {
+    fn calculate_channel_values_and_send(
+        &self,
+        context: &mut impl ProcessContext<Self>,
+        sensor_data: &SensorData,
+    ) {
+        // TODO: implement a better way to decide on which channel to send each sensor_id data.
+        // 1_a sent to 7-8-9, 1_b sent to 10-11-12:
+        let mut channel: u8 = 7;
+        if sensor_data.sensor_id == "1_b" {
+            channel = 10;
+        }
+
+        self.send_midi_message(
+            context,
+            channel,
+            (sensor_data.euler_x * 127.0 / 360.0) as u8,
+        );
+        self.send_midi_message(
+            context,
+            channel + 1,
+            (sensor_data.euler_y * 127.0 / 360.0) as u8,
+        );
+        self.send_midi_message(
+            context,
+            channel + 2,
+            (sensor_data.euler_z * 127.0 / 360.0) as u8,
+        );
+    }
+
+    fn send_midi_message(&self, context: &mut impl ProcessContext<Self>, channel: u8, value: u8) {
         let midi_data = [
-            0xB0,                          // Control Change message on channel 1
-            7,                             // CC number (e.g., volume)
-            (value * 127.0 / 360.0) as u8, // CC value (0-127)
+            0xB0,    // Control Change message on channel 1
+            channel, // CC number
+            value,   // CC value (0-127)
         ];
 
         let midi_message =

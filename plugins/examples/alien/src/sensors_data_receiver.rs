@@ -8,8 +8,8 @@ use std::sync::{Arc, Mutex};
 #[derive(Deserialize, Debug)]
 #[allow(dead_code)]
 pub struct SensorData {
-    sensor_id: String,
-    timestamp: String,
+    pub sensor_id: String,
+    pub timestamp: String,
     pub euler_x: f32,
     pub euler_y: f32,
     pub euler_z: f32,
@@ -31,14 +31,13 @@ impl SensorDataReceiver {
     pub fn initialize(&mut self) {
         let curr_data = self.curr_data.clone();
         let inner_callback = move |payload: Payload, _: RawClient| {
-            let curr_data_clone = curr_data.clone();
-            SensorDataReceiver::handle_message(&payload, curr_data_clone);
+            SensorDataReceiver::handle_message(&payload, curr_data.clone());
         };
 
         self.client = ClientBuilder::new("http://localhost:3001")
             .on("receive-data", inner_callback)
             .connect()
-            .ok()
+            .ok() // TODO: error handling.
     }
 
     fn handle_message(payload: &Payload, curr_data: Arc<Mutex<HashMap<String, SensorData>>>) {
@@ -46,10 +45,10 @@ impl SensorDataReceiver {
             Payload::Text(text) => {
                 if let Some(Value::String(msg)) = text.first() {
                     let sensor_data: SensorData =
-                        from_str(msg).expect("JSON was not well-formatted");
+                        from_str(msg).expect("JSON was not well-formatted"); // TODO: error handling.
                     curr_data
                         .lock()
-                        .expect("failed to lock")
+                        .expect("failed to lock") // TODO: error handling.
                         .insert(sensor_data.sensor_id.clone(), sensor_data);
                 }
             }
