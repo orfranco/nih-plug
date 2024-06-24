@@ -36,7 +36,7 @@ impl SensorDataReceiver {
         };
 
         self.client = ClientBuilder::new("http://localhost:3001")
-            .on("recieve-data", inner_callback)
+            .on("receive-data", inner_callback)
             .connect()
             .ok()
     }
