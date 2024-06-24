@@ -1,9 +1,15 @@
-use nih_plug::prelude::*;
+use nih_plug::{params, prelude::*};
 use nih_plug::prelude::NoteEvent;
-use std::sync::Arc;
+use nih_plug_iced::backend::glow::CULL_FACE_MODE;
+use std::default;
+use std::sync::{Arc, Mutex};
 use nih_plug_iced::IcedState;
+use std::collections::HashMap;
+use sensors_data_reciever::{SensorDataReciever, SensorData};
+
 
 mod editor;
+mod sensors_data_reciever;
 
 #[derive(Params)]
 struct AlienParams {
@@ -16,14 +22,13 @@ struct AlienParams {
 
 struct Alien {
     params: Arc<AlienParams>,
+    sensors_data_reciever: SensorDataReciever,
 }
 
 impl Default for AlienParams {
     fn default() -> Self {
         Self {
             editor_state: editor::default_state(),
-
-            // See the main gain example for more details
             cc_value: FloatParam::new(
                 "CC Value",
                 0.0,
@@ -32,7 +37,7 @@ impl Default for AlienParams {
                     max: 1.0,
                     factor: FloatRange::skew_factor(1.0),
                 },
-            )
+            ),            
         }
     }
 }
@@ -41,6 +46,7 @@ impl Default for Alien {
     fn default() -> Self {
         Self {
             params: Arc::new(AlienParams::default()),
+            sensors_data_reciever: SensorDataReciever::new(),
         }
     }
 }
@@ -85,6 +91,7 @@ impl Plugin for Alien {
         _buffer_config: &BufferConfig,
         _context: &mut impl InitContext<Self>,
     ) -> bool {
+        self.sensors_data_reciever.initialize();
         true
     }
 
@@ -94,9 +101,10 @@ impl Plugin for Alien {
         _aux: &mut AuxiliaryBuffers,
         context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
-        let value = self.compute_internal_knob_value();
-        self.send_midi_controller_message(context, value);
-        
+        let curr_data = self.sensors_data_reciever.curr_data.lock().expect("failed locking");
+        for (key, value) in curr_data.iter() {
+            self.send_midi_controller_message(context, value.euler_x)
+        }        
         ProcessStatus::Normal
     }
 }
@@ -114,12 +122,16 @@ impl Alien {
         let midi_data = [
             0xB0, // Control Change message on channel 1
             7,    // CC number (e.g., volume)
-            (value * 127.0) as u8, // CC value (0-127)
+            (value * 127.0 / 360.0) as u8, // CC value (0-127)
         ];
 
         let midi_message = NoteEvent::from_midi(0, &midi_data).expect("Failed to create MIDI message");
 
         context.send_event(midi_message);
+    }
+
+    fn update_data(sensor_data: SensorData) {
+
     }
 }
 
