@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use crate::AlienParams;
 
-// Makes sense to also define this here, makes it a bit easier to keep track of
 pub(crate) fn default_state() -> Arc<IcedState> {
     IcedState::from_size(200, 150)
 }
@@ -82,8 +81,11 @@ impl IcedEditor for AlienEditor {
                     .vertical_alignment(alignment::Vertical::Center),
             )
             .push(
-                nih_widgets::ParamSlider::new(&mut self.cc_value_slider_state, &self.params.cc_value)
-                    .map(Message::ParamUpdate),
+                nih_widgets::ParamSlider::new(
+                    &mut self.cc_value_slider_state,
+                    &self.params.cc_value,
+                )
+                .map(Message::ParamUpdate),
             )
             .into()
     }

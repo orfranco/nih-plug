@@ -1,15 +1,11 @@
-use nih_plug::{params, prelude::*};
 use nih_plug::prelude::NoteEvent;
-use nih_plug_iced::backend::glow::CULL_FACE_MODE;
-use std::default;
-use std::sync::{Arc, Mutex};
+use nih_plug::prelude::*;
 use nih_plug_iced::IcedState;
-use std::collections::HashMap;
-use sensors_data_reciever::{SensorDataReciever, SensorData};
-
+use sensors_data_receiver::SensorDataReceiver;
+use std::sync::Arc;
 
 mod editor;
-mod sensors_data_reciever;
+mod sensors_data_receiver;
 
 #[derive(Params)]
 struct AlienParams {
@@ -22,7 +18,7 @@ struct AlienParams {
 
 struct Alien {
     params: Arc<AlienParams>,
-    sensors_data_reciever: SensorDataReciever,
+    sensors_data_receiver: SensorDataReceiver,
 }
 
 impl Default for AlienParams {
@@ -37,7 +33,7 @@ impl Default for AlienParams {
                     max: 1.0,
                     factor: FloatRange::skew_factor(1.0),
                 },
-            ),            
+            ),
         }
     }
 }
@@ -46,7 +42,7 @@ impl Default for Alien {
     fn default() -> Self {
         Self {
             params: Arc::new(AlienParams::default()),
-            sensors_data_reciever: SensorDataReciever::new(),
+            sensors_data_receiver: SensorDataReceiver::new(),
         }
     }
 }
@@ -59,16 +55,14 @@ impl Plugin for Alien {
 
     const VERSION: &'static str = "0.1.0";
 
-    const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
-        AudioIOLayout {
-            main_input_channels: NonZeroU32::new(1),
-            main_output_channels:  NonZeroU32::new(1),
-            aux_input_ports: &[],
-            aux_output_ports: &[],
-            names: PortNames::const_default(),
-        }
-    ];   
-    
+    const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[AudioIOLayout {
+        main_input_channels: NonZeroU32::new(1),
+        main_output_channels: NonZeroU32::new(1),
+        aux_input_ports: &[],
+        aux_output_ports: &[],
+        names: PortNames::const_default(),
+    }];
+
     const MIDI_INPUT: MidiConfig = MidiConfig::MidiCCs;
     const MIDI_OUTPUT: MidiConfig = MidiConfig::MidiCCs;
     type SysExMessage = ();
@@ -79,10 +73,7 @@ impl Plugin for Alien {
     }
 
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
-        editor::create(
-            self.params.clone(),
-            self.params.editor_state.clone(),
-        )
+        editor::create(self.params.clone(), self.params.editor_state.clone())
     }
 
     fn initialize(
@@ -91,7 +82,7 @@ impl Plugin for Alien {
         _buffer_config: &BufferConfig,
         _context: &mut impl InitContext<Self>,
     ) -> bool {
-        self.sensors_data_reciever.initialize();
+        self.sensors_data_receiver.initialize();
         true
     }
 
@@ -101,40 +92,32 @@ impl Plugin for Alien {
         _aux: &mut AuxiliaryBuffers,
         context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
-        let curr_data = self.sensors_data_reciever.curr_data.lock().expect("failed locking");
-        for (key, value) in curr_data.iter() {
+        let curr_data = self
+            .sensors_data_receiver
+            .curr_data
+            .lock()
+            .expect("failed locking");
+        for (_key, value) in curr_data.iter() {
             self.send_midi_controller_message(context, value.euler_x)
-        }        
+        }
         ProcessStatus::Normal
     }
 }
 
 impl Alien {
-    fn compute_internal_knob_value(&mut self) -> f32 {
-        self.params.cc_value.smoothed.next()
-    }
-
-    fn send_midi_controller_message(
-        &self,
-        context: &mut impl ProcessContext<Self>,
-        value: f32,
-    ) {
+    fn send_midi_controller_message(&self, context: &mut impl ProcessContext<Self>, value: f32) {
         let midi_data = [
-            0xB0, // Control Change message on channel 1
-            7,    // CC number (e.g., volume)
+            0xB0,                          // Control Change message on channel 1
+            7,                             // CC number (e.g., volume)
             (value * 127.0 / 360.0) as u8, // CC value (0-127)
         ];
 
-        let midi_message = NoteEvent::from_midi(0, &midi_data).expect("Failed to create MIDI message");
+        let midi_message =
+            NoteEvent::from_midi(0, &midi_data).expect("Failed to create MIDI message");
 
         context.send_event(midi_message);
     }
-
-    fn update_data(sensor_data: SensorData) {
-
-    }
 }
-
 
 impl ClapPlugin for Alien {
     const CLAP_ID: &'static str = "com.moist-plugins-gmbh.gain-gui-iced";
@@ -157,22 +140,6 @@ impl Vst3Plugin for Alien {
 
 nih_export_clap!(Alien);
 nih_export_vst3!(Alien);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 /*
 
@@ -241,7 +208,7 @@ impl Plugin for MidiInverter {
     ) -> ProcessStatus {
         let lfo_value = self.compute_internal_knob_value();
         self.send_midi_controller_message(context, lfo_value);
-        
+
         ProcessStatus::Normal
     }
     }
@@ -273,7 +240,7 @@ impl MidiInverter {
     }
 }
 
-    
+
 impl ClapPlugin for MidiInverter {
     const CLAP_ID: &'static str = "com.moist-plugins-gmbh.midi-inverter";
     const CLAP_DESCRIPTION: Option<&'static str> =
