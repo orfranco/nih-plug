@@ -1,1 +1,3 @@
 /target/
+/plugins/examples/alien/infra/output.log
+/.idea/

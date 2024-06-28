@@ -10,7 +10,7 @@ mod sensors_data_receiver;
 
 #[derive(Params)]
 struct AlienParams {
-    #[persist = "editor-state"]
+    #[persist =  "editor-state"]
     editor_state: Arc<IcedState>,
 
     #[id = "cc_value"]
@@ -83,8 +83,8 @@ impl Plugin for Alien {
         _buffer_config: &BufferConfig,
         _context: &mut impl InitContext<Self>,
     ) -> bool {
+        nih_log!("Initializing Alien...");
         self.sensors_data_receiver.initialize();
-
         true
     }
 

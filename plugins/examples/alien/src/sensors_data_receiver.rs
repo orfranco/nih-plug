@@ -4,6 +4,7 @@ use serde::Deserialize;
 use serde_json::{from_str, Value};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use nih_plug::{nih_error, nih_log};
 
 #[derive(Deserialize, Debug)]
 #[allow(dead_code)]
@@ -37,7 +38,8 @@ impl SensorDataReceiver {
         self.client = ClientBuilder::new("http://localhost:3001")
             .on("receive-data", inner_callback)
             .connect()
-            .ok() // TODO: error handling.
+            .map_err(|e| nih_error!("Failed Connecting to Sensors Data Socket"))
+            .ok()
     }
 
     fn handle_message(payload: &Payload, curr_data: Arc<Mutex<HashMap<String, SensorData>>>) {
