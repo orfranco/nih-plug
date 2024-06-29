@@ -1,10 +1,13 @@
+use anyhow::{anyhow, Context, Result};
+use nih_plug::{nih_error, nih_log};
 use rust_socketio::client::Client;
-use rust_socketio::{ClientBuilder, Payload, RawClient};
+use rust_socketio::{ClientBuilder, Error, Payload, RawClient};
 use serde::Deserialize;
 use serde_json::{from_str, Value};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use nih_plug::{nih_error, nih_log};
+
+const SOCKET_ADDR: &str = "http://localhost:3001";
 
 #[derive(Deserialize, Debug)]
 #[allow(dead_code)]
@@ -29,32 +32,50 @@ impl SensorDataReceiver {
         }
     }
 
-    pub fn initialize(&mut self) {
+    pub fn initialize(&mut self) -> Result<(), Error> {
+        nih_log!("Initializing Sensors Data Receiver. Socket Address: {SOCKET_ADDR}");
         let curr_data = self.curr_data.clone();
         let inner_callback = move |payload: Payload, _: RawClient| {
-            SensorDataReceiver::handle_message(&payload, curr_data.clone());
+            SensorDataReceiver::handle_message(&payload, curr_data.clone())
+                .map_err(|err| nih_error!("Failed handling Sensors Data Message. Error: {err}"))
+                .ok();
         };
 
-        self.client = ClientBuilder::new("http://localhost:3001")
-            .on("receive-data", inner_callback)
-            .connect()
-            .map_err(|e| nih_error!("Failed Connecting to Sensors Data Socket"))
-            .ok()
+        self.client = Some(
+            ClientBuilder::new(SOCKET_ADDR)
+                .on("receive-data", inner_callback)
+                .connect()?,
+        );
+
+        Ok(())
     }
 
-    fn handle_message(payload: &Payload, curr_data: Arc<Mutex<HashMap<String, SensorData>>>) {
-        match payload {
-            Payload::Text(text) => {
-                if let Some(Value::String(msg)) = text.first() {
-                    let sensor_data: SensorData =
-                        from_str(msg).expect("JSON was not well-formatted"); // TODO: error handling.
-                    curr_data
-                        .lock()
-                        .expect("failed to lock") // TODO: error handling.
-                        .insert(sensor_data.sensor_id.clone(), sensor_data);
-                }
-            }
-            _ => println!("recieved a weird message"),
+    fn handle_message(
+        payload: &Payload,
+        curr_data: Arc<Mutex<HashMap<String, SensorData>>>,
+    ) -> Result<()> {
+        if let Payload::Text(text) = payload {
+            let msg = text
+                .first()
+                .ok_or_else(|| anyhow!("Expected text to contain at least one element"))?;
+
+            let msg_str = match msg {
+                Value::String(s) => s,
+                _ => return Err(anyhow!("Expected first element to be a string")),
+            };
+
+            let sensor_data: SensorData =
+                from_str(msg_str).context("Failed to deserialize JSON message")?;
+
+            let mut data = curr_data
+                .lock()
+                .map_err(|err| anyhow::anyhow!("Failed to lock curr_data: {err}"))?;
+
+            data.insert(sensor_data.sensor_id.clone(), sensor_data);
+
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Received an unexpected payload type"))
         }
     }
 }
