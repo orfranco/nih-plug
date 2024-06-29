@@ -3,7 +3,7 @@ use nih_plug::{nih_error, nih_log};
 use rust_socketio::client::Client;
 use rust_socketio::{ClientBuilder, Error, Payload, RawClient};
 use serde::Deserialize;
-use serde_json::{from_str, Value};
+use serde_json::from_str;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -57,15 +57,12 @@ impl SensorDataReceiver {
         if let Payload::Text(text) = payload {
             let msg = text
                 .first()
-                .ok_or_else(|| anyhow!("Expected text to contain at least one element"))?;
-
-            let msg_str = match msg {
-                Value::String(s) => s,
-                _ => return Err(anyhow!("Expected first element to be a string")),
-            };
+                .ok_or_else(|| anyhow!("Expected text to contain at least one element"))?
+                .as_str()
+                .ok_or_else(|| anyhow!("Expected first element to be a string"))?;
 
             let sensor_data: SensorData =
-                from_str(msg_str).context("Failed to deserialize JSON message")?;
+                from_str(msg).context("Failed to deserialize JSON message")?;
 
             let mut data = curr_data
                 .lock()
